@@ -345,6 +345,18 @@ $('mic').onclick=()=>{
   }catch(e){rec=null;listenAll(false);micFallback('The mic is blocked on this page. Tap the box and use your keyboard mic.');}
 };
 
+/* ---------- keep the screen on ---------- */
+let wakeLock=null,wakeWanted=true;
+try{wakeWanted=localStorage.getItem('hearth.awake')!=='off';}catch(e){}
+async function keepAwake(){
+  if(!wakeWanted||document.hidden||wakeLock||!('wakeLock' in navigator))return;
+  try{wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}catch(e){}
+}
+function setAwake(on){wakeWanted=on;try{localStorage.setItem('hearth.awake',on?'on':'off');}catch(e){}if(on)keepAwake();else if(wakeLock){wakeLock.release();wakeLock=null;}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepAwake();});
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,keepAwake,{passive:true}));
+keepAwake();
+
 /* ---------- sound and ringing ---------- */
 let ac=null,ringInt=null,ringing=null,queue=[];
 function unlock(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume();}catch(e){}}
@@ -482,7 +494,8 @@ function renderSheet(){
     const sel=el('select');STORES.forEach(([k])=>{const o=el('option',null,cap(k));o.value=k;o.selected=k===S.store;sel.append(o);});sel.onchange=()=>{S.store=sel.value;save();};sel.setAttribute('aria-label','Default store');const w=el('div','fld');w.append(sel);b.append(w);
     b.append(el('h3',null,'ALERTS'));
     const nb=el('button','btn','Allow notifications');nb.onclick=async()=>{try{const r=await Notification.requestPermission();say('Notifications: '+r);}catch(e){say('Notifications are blocked on this page.');}};b.append(nb);
-    const wk=el('button','btn','Keep screen awake');wk.onclick=async()=>{try{await navigator.wakeLock.request('screen');say('Screen stays on while this is open.');}catch(e){say('Screen lock is not available here.');}};b.append(wk);
+    const wk=el('button','btn'+(wakeWanted?' go':''),'Screen stays on: '+(wakeWanted?'On':'Off'));wk.onclick=()=>{setAwake(!wakeWanted);renderSheet();say(wakeWanted?'Screen stays on while Hearth is open.':'Screen can switch off as normal.');};b.append(wk);
+    if(!('wakeLock' in navigator))b.append(el('p','help','This browser cannot keep the screen on. Update it, or raise Auto-Lock in your phone settings.'));
     b.append(el('p','help','Reminders ring only while this page is open. For anything that matters, use "Add to Google Calendar" on the item.'));
     if(!persistent)b.append(el('p','help','This browser is not saving data, so items vanish on reload.'));
     b.append(el('h3',null,'THINGS TO SAY'));
@@ -861,7 +874,7 @@ const dog={
     return[
       ()=>[st,wk,sit(4000),wk,sit(2500),yawn,zz()],
       ()=>[st,sit(1500),{s:'bark',ms:1700},sit(2500),wk,sit(2000),yawn,zz()],
-      ()=>[st,sit(1200),{s:'spin',ms:1500},sit(2500),wk,{s:'spin',ms:1100},sit(2000),yawn,zz()],
+      ()=>[st,sit(1200),{s:'spin',ms:1400},sit(2500),wk,{s:'spin',ms:1400},sit(2000),yawn,zz()],
       ()=>[st,wk,{s:'roll',ms:3400},sit(2500),yawn,zz()],
       ()=>[st,{s:'walkEdge'},sit(1800),{s:'bark',ms:1300,snub:true},sit(3000),wk,sit(1500),yawn,zz()],
     ];
@@ -967,7 +980,7 @@ const dog={
       curled();
       const z=(this.t>>4)%3;for(let i=0;i<=z;i++){const zx=X+(d>0?12:-18)+i*4,zy=Y-20-i*6;r(c,zx,zy,3,1,P.cream);r(c,zx+1,zy+1,1,1,P.cream);r(c,zx,zy+2,3,1,P.cream);}
     }else if(st==='sit'){
-      const up=glad&&this.t%4<2?2:0;
+      const up=now<this.happy&&this.t%4<2?2:0;
       sit(-up,'side',this.headFace*d>0?1:-1,0,{});
     }else if(st==='listen'){
       const face=this.headMode==='side'?this.headFace:1;
@@ -991,8 +1004,8 @@ const dog={
       walkPose(f,lg);
       head(16,-11,st==='hop'?-.2:0,'side',d,{});
     }else if(st==='spin'){
-      const ph=(this.t>>1)%4;lift=Math.round(Math.abs(Math.sin(this.t/2))*2);
-      if(ph===0||ph===2){d=ph?-1:1;walkPose(0,1);head(16,-11,0,'side',d,{glad:true});}
+      const ph=Math.min(3,Math.floor(pr*4));
+      if(ph===0||ph===2){d=ph?-this.dir:this.dir;walkPose(0,1);head(16,-11,0,'side',d,{glad:true});}
       else if(ph===1){q(-14,-15,28,13,B);q(-11,-20,22,5,B);q(-6,-18,12,16,Wh);q(-11,-2,6,2,Wh);q(5,-2,6,2,Wh);head(0,-13,0,'front',1,{glad:true});}
       else{q(-8,-32,16,14,DOG.G);q(-6,-33,12,2,DOG.GL);q(-11,-28,4,13,DOG.GD);q(7,-28,4,13,DOG.GD);q(-14,-15,28,13,B);q(-11,-20,22,5,B);q(-11,-19,22,8,DOG.G);q(-7,-20,14,2,DOG.GL);q(-11,-3,7,3,D);q(4,-3,7,3,D);q(-6,-22,12,6,Wh);q(-4,-23,8,1,L);q(-3,-17,6,8,B);q(-1,-16,2,6,DOG.GL);}
     }else if(st==='roll'){
