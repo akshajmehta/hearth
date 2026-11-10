@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hearth">
 <meta name="theme-color" content="#1d1220">
 <title>Hearth</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
@@ -21,6 +25,11 @@ a{color:inherit}
 #next b{color:var(--ember);font-family:"Pixelify Sans",VT323,monospace;font-size:15px;letter-spacing:.5px;white-space:nowrap}
 #next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 #next em{font-style:normal;color:var(--dim);white-space:nowrap}
+#fsBtn{flex:none;width:30px;height:26px;margin:-4px -6px -4px 0;background:none;border:0;padding:4px;color:var(--ember);align-self:center}
+#fsBtn svg{width:100%;height:100%;display:block}
+#next,#dock{transition:opacity .4s}
+body.calm #next,body.calm #dock,body.calm #bubble{opacity:0;pointer-events:none}
+body.calm #dock>*{pointer-events:none}
 
 #dock{position:fixed;left:0;right:0;bottom:0;padding:0 12px calc(12px + env(safe-area-inset-bottom));z-index:3;pointer-events:none}
 #dock>*{pointer-events:auto}
@@ -80,7 +89,7 @@ body.wall #next,body.wall #dock,body.wall #bubble,body.wall #sheet{display:none}
 <body>
 <canvas id="scene" aria-label="A pixel-art living room with a fire burning, a dog named Coffee on the rug and a spaniel resting on the armchair"></canvas>
 
-<div id="next" class="px"><b>NEXT</b><span id="nextT">Nothing planned</span><em id="nextW"></em></div>
+<div id="next" class="px"><b>NEXT</b><span id="nextT">Nothing planned</span><em id="nextW"></em><button id="fsBtn" aria-label="Full screen"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path id="fsIcon" d="M0 0h3v1H1v2H0zM6 0h3v3H8V1H6zM0 6h1v2h2v1H0zM8 6h1v3H6V8h2z"/></svg></button></div>
 
 <div id="dock">
   <div id="bubble" role="status"><p id="bubT"></p><button id="undo" hidden>Undo</button></div>
@@ -348,11 +357,47 @@ $('mic').onclick=()=>{
 /* ---------- keep the screen on ---------- */
 let wakeLock=null,wakeWanted=true;
 try{wakeWanted=localStorage.getItem('hearth.awake')!=='off';}catch(e){}
-async function keepAwake(){
-  if(!wakeWanted||document.hidden||wakeLock||!('wakeLock' in navigator))return;
-  try{wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}catch(e){}
+const APPLE=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+let keepVid=null;
+function videoAwake(on){
+  if(!on){if(keepVid)keepVid.pause();return;}
+  if(!keepVid){
+    keepVid=document.createElement('video');keepVid.setAttribute('playsinline','');keepVid.setAttribute('muted','');keepVid.muted=true;keepVid.loop=true;
+    keepVid.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none;z-index:-1';
+    keepVid.src='data:video/mp4;base64,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';
+    keepVid.addEventListener('timeupdate',()=>{if(keepVid.currentTime>1.5)keepVid.currentTime=.1;});
+    document.body.append(keepVid);
+  }
+  if(keepVid.paused){const p=keepVid.play();if(p&&p.catch)p.catch(()=>{});}
 }
-function setAwake(on){wakeWanted=on;try{localStorage.setItem('hearth.awake',on?'on':'off');}catch(e){}if(on)keepAwake();else if(wakeLock){wakeLock.release();wakeLock=null;}}
+async function keepAwake(){
+  if(!wakeWanted||document.hidden)return;
+  let ok=!!wakeLock;
+  if(!ok&&'wakeLock' in navigator){try{wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});ok=true;}catch(e){}}
+  if(APPLE||!ok)videoAwake(true);
+}
+function setAwake(on){wakeWanted=on;try{localStorage.setItem('hearth.awake',on?'on':'off');}catch(e){}if(on)keepAwake();else{if(wakeLock){wakeLock.release();wakeLock=null;}videoAwake(false);}}
+
+/* ---------- full screen and calm mode ---------- */
+const root=document.documentElement,canFS=!!(root.requestFullscreen||root.webkitRequestFullscreen);
+const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isFS=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+function toggleFS(){
+  if(isFS()){(document.exitFullscreen||document.webkitExitFullscreen).call(document);return;}
+  if(canFS){try{const r=(root.requestFullscreen||root.webkitRequestFullscreen).call(root);if(r&&r.catch)r.catch(()=>fsHelp());}catch(e){fsHelp();}}else fsHelp();
+}
+function fsHelp(){say(standalone?'Already full screen. Controls hide after a few seconds; tap to bring them back.':'This browser blocks full screen. Tap Share, then Add to Home Screen, and open Hearth from there.');}
+function fsIcon(){$('fsIcon').setAttribute('d',isFS()?'M2 0h1v3H0V2h2zM6 0h1v2h2v1H6zM0 6h3v3H2V7H0zM6 6h3v1H7v2H6z':'M0 0h3v1H1v2H0zM6 0h3v3H8V1H6zM0 6h1v2h2v1H0zM8 6h1v3H6V8h2z');$('fsBtn').setAttribute('aria-label',isFS()?'Exit full screen':'Full screen');}
+['fullscreenchange','webkitfullscreenchange'].forEach(ev=>document.addEventListener(ev,()=>{fsIcon();wake();}));
+$('fsBtn').onclick=e=>{e.stopPropagation();toggleFS();};
+let calmT=null;
+function wake(){
+  document.body.classList.remove('calm');clearTimeout(calmT);
+  if(isFS()||standalone)calmT=setTimeout(()=>{if(!$('sheet').classList.contains('on')&&!rec&&!ringing&&document.activeElement!==$('say'))document.body.classList.add('calm');else wake();},6000);
+}
+addEventListener('pointerdown',e=>{if(document.body.classList.contains('calm')){e.stopPropagation();e.preventDefault();}wake();},{capture:true});
+addEventListener('keydown',wake,{capture:true});
+wake();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepAwake();});
 ['pointerdown','keydown'].forEach(ev=>addEventListener(ev,keepAwake,{passive:true}));
 keepAwake();
@@ -495,7 +540,8 @@ function renderSheet(){
     b.append(el('h3',null,'ALERTS'));
     const nb=el('button','btn','Allow notifications');nb.onclick=async()=>{try{const r=await Notification.requestPermission();say('Notifications: '+r);}catch(e){say('Notifications are blocked on this page.');}};b.append(nb);
     const wk=el('button','btn'+(wakeWanted?' go':''),'Screen stays on: '+(wakeWanted?'On':'Off'));wk.onclick=()=>{setAwake(!wakeWanted);renderSheet();say(wakeWanted?'Screen stays on while Hearth is open.':'Screen can switch off as normal.');};b.append(wk);
-    if(!('wakeLock' in navigator))b.append(el('p','help','This browser cannot keep the screen on. Update it, or raise Auto-Lock in your phone settings.'));
+    const fb=el('button','btn',isFS()?'Exit full screen':'Full screen');fb.onclick=()=>{toggleFS();};b.append(fb);
+    b.append(el('p','help','In full screen the controls hide after a few seconds. Tap anywhere to bring them back.'));
     b.append(el('p','help','Reminders ring only while this page is open. For anything that matters, use "Add to Google Calendar" on the item.'));
     if(!persistent)b.append(el('p','help','This browser is not saving data, so items vanish on reload.'));
     b.append(el('h3',null,'THINGS TO SAY'));
