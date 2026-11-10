@@ -544,7 +544,7 @@ function renderSheet(){
     const fb=el('button','btn',isFS()?'Exit full screen':'Full screen');fb.onclick=()=>{toggleFS();};b.append(fb);
     b.append(el('p','help','In full screen the controls hide after a few seconds. Tap anywhere to bring them back.'));
     b.append(el('h3',null,'HOUSE SECRETS'));
-    const sp=el('button','btn','Preview the coffee spill');sp.onclick=()=>{$('sheet').classList.remove('on');setTimeout(()=>{const n=performance.now();spill.mug='table';spill.needsClean=false;spill.phase=null;spill.size=0;if(!queen.listening){queen.state='rest';spill.start(n);}},400);};b.append(sp);
+    const sp=el('button','btn','Preview the coffee spill');sp.onclick=()=>{$('sheet').classList.remove('on');setTimeout(()=>{const n=performance.now();spill.mug='table';spill.empty=false;spill.needsClean=false;spill.phase=null;spill.size=0;if(!queen.listening){queen.state='rest';spill.start(n);}},400);};b.append(sp);
     b.append(el('p','help','On its own this happens about once or twice an hour, on wider screens like an iPad or laptop.'));
     b.append(el('p','help','Reminders ring only while this page is open. For anything that matters, use "Add to Google Calendar" on the item.'));
     if(!persistent)b.append(el('p','help','This browser is not saving data, so items vanish on reload.'));
@@ -931,6 +931,7 @@ const dog={
   },
   next(now){
     if(spill.needsClean&&!this.plan.some(p=>p.s==='lick'))this.plan=spill.cleanPlan(this.state==='sleep');
+    else if(spill.phase==='fetch'&&!this.plan.some(p=>p.s==='reach')&&this.state!=='reach')this.plan=spill.fetchPlan();
     if(!this.plan.length){
       if(this.onSofa)this.plan=[{s:'stretch',ms:900},{s:'sit',ms:1500},{s:'hopDown',ms:620},{s:'sit',ms:1500},{s:'yawn',ms:1000},{s:'sleep',ms:rnd(9000,18000)}];
       else{const b=this.bank();let i;do{i=Math.random()*b.length|0;}while(i===this.last);this.last=i;this.plan=b[i]().slice();}
@@ -940,7 +941,8 @@ const dog={
   begin(p,now){
     let s=p.s;this.start=now;this.until=now+(p.ms||20000);this.hop=null;
     if(s==='walkTo'){const g=spill.lickSpot();this.tx=g.x;this.ty=g.y;this.dir=this.tx>this.x?1:-1;s='walk';}
-    else if(s==='lick'){this.dir=1;}
+    else if(s==='lick'||s==='grab'||s==='reach'){this.dir=1;}
+    else if(s==='carryTo'){const g=spill.reachSpot();this.tx=g.x;this.ty=g.y;this.dir=this.tx>this.x?1:-1;s='walk';}
     else if(s==='walk'){this.tx=this.rugX();this.ty=this.rugY()-rnd(0,6);this.dir=this.tx>this.x?1:-1;}
     else if(s==='walkEdge'){const e=this.edge();this.tx=e.x;this.ty=e.y;this.dir=this.tx>this.x?1:-1;s='walk';}
     else if(s==='hopUp'){const g=this.seat();this.hop={x0:this.x,y0:this.y,x1:g.x,y1:g.y,h:18,dest:true};this.dir=1;s='hop';}
@@ -991,10 +993,11 @@ const dog={
       if(Math.random()<.5){this.headFace=-this.headFace;}
       this.headMode='side';this.headNext=now+rnd(1200,2800);
     }else if(this.state==='lick'&&!spill.needsClean){this.until=0;
+    }else if(this.state==='reach'&&spill.mug==='carried'&&now-this.start>900){spill.place(now);
     }else if(this.state==='roll'){
       const p=(now-this.start)/(this.until-this.start);if(p>.2&&p<.85)this.x+=Math.sin(this.t/3)*.25;
     }
-    if(now>this.until){if(this.state==='hop')this.landHop();this.next(now);}
+    if(now>this.until){if(this.state==='hop')this.landHop();if(this.state==='grab'&&spill.mug==='floor')spill.mug='carried';this.next(now);}
   },
   draw(now){
     let wx=this.x|0,wy=this.y|0,d=this.dir;const X=45,Y=66,c=dogC,{B,D,L,W:Wh,K}=DOG,dur=Math.max(1,this.until-this.start),pr=Math.min(1,(now-this.start)/dur);
@@ -1063,7 +1066,10 @@ const dog={
       if(ph===0||ph===2){d=ph?-this.dir:this.dir;walkPose(0,1);head(16,-11,0,'side',d,{glad:true});}
       else if(ph===1){q(-14,-15,28,13,B);q(-11,-20,22,5,B);q(-6,-18,12,16,Wh);q(-11,-2,6,2,Wh);q(5,-2,6,2,Wh);head(0,-13,0,'front',1,{glad:true});}
       else{q(-8,-32,16,14,DOG.G);q(-6,-33,12,2,DOG.GL);q(-11,-28,4,13,DOG.GD);q(7,-28,4,13,DOG.GD);q(-14,-15,28,13,B);q(-11,-20,22,5,B);q(-11,-19,22,8,DOG.G);q(-7,-20,14,2,DOG.GL);q(-11,-3,7,3,D);q(4,-3,7,3,D);q(-6,-22,12,6,Wh);q(-4,-23,8,1,L);q(-3,-17,6,8,B);q(-1,-16,2,6,DOG.GL);}
-    }else if(st==='lick'){
+    }else if(st==='reach'){
+      lift=6;q(-6,0,4,6,Wh);q(4,0,4,6,Wh);
+      sit(0,'side',d,-.2,{glad:true});q(11,-17,4,3,Wh);q(12,-14,4,3,Wh);
+    }else if(st==='lick'||st==='grab'){
       walkPose(0,0);
       const fl=(this.t>>1)%3;head(17,-2+(fl===1?1:0),.5,'side',d,{mouth:fl!==2});
     }else if(st==='roll'){
@@ -1183,17 +1189,26 @@ const queen={
 };
 /* rare event: the queen's tail knocks the coffee off the table, Coffee licks it up */
 const spill={
-  mug:'table',phase:null,t0:0,ft:0,pt:0,size:0,left:1,needsClean:false,back:0,drops:[],nextAt:0,lastT:0,
+  mug:'table',empty:false,refillAt:0,phase:null,t0:0,ft:0,pt:0,size:0,left:1,needsClean:false,back:0,drops:[],nextAt:0,lastT:0,
   table(){const tx=CH()+42,b=floorY+2;return{x:tx+4,y:b-23};},
   floorMug(){const p=this.table();return{x:p.x+3,y:floorY+9};},
   centre(){const m=this.floorMug();return{x:m.x-7,y:floorY+13};},
   lickSpot(){const c=this.centre();return{x:c.x-23,y:floorY+18};},
+  reachSpot(){const p=this.table();return{x:p.x-10,y:floorY+9};},
+  fetchPlan(){return(this.mug==='carried'?[]:[{s:'grab',ms:700}]).concat([{s:'carryTo'},{s:'reach',ms:1700},{s:'sit',ms:2400},{s:'walk'},{s:'yawn',ms:1000},{s:'sleep',ms:rnd(12000,22000)}]);},
+  place(now){this.mug='table';this.empty=true;this.refillAt=now+18e4;this.phase=null;dog.happy=now+2000;dog.heart(2);},
+  drawCarried(){
+    if(this.mug!=='carried')return;
+    const d=dog.dir,up=dog.state==='reach'||dog.state==='sit'||dog.state==='listen';
+    const lift=dog.state==='reach'?6:0,ax=Math.round(dog.x+d*(up?13:24)),ay=Math.round(dog.y-(up?21:18)-lift);
+    r(ctx,ax-3,ay-1,6,4,P.cream);r(ctx,d>0?ax+3:ax-5,ay,2,2,P.cream);r(ctx,ax-3,ay+2,6,1,'#cdbb9c');
+  },
   schedule(now){
     let last=0;try{last=+localStorage.getItem('hearth.spill')||0;}catch(e){}
     const gap=last?Math.max(0,last+30*6e4-Date.now()):0;
     this.nextAt=now+Math.max(rnd(10,40)*6e4,gap);
   },
-  can(){return W>=140&&!dog.listening&&!queen.listening&&(queen.state==='rest'||queen.state==='sleep')&&this.mug==='table'&&!document.hidden;},
+  can(){return W>=140&&!this.empty&&!dog.listening&&!queen.listening&&(queen.state==='rest'||queen.state==='sleep')&&this.mug==='table'&&!document.hidden;},
   start(now){
     this.phase='swish';this.t0=now;queen.snubUntil=0;queen.state='swish';queen.start=now;queen.until=now+1500;
     try{localStorage.setItem('hearth.spill',String(Date.now()));}catch(e){}
@@ -1215,9 +1230,9 @@ const spill={
     if(this.phase==='spilled'){
       this.size=Math.min(1,(now-this.pt)/900);
       if(dog.state==='lick'){this.left=Math.max(0,this.left-dt/7000);
-        if(this.left<=0){this.needsClean=false;this.phase=null;this.back=now+18e4;dog.happy=now+2000;dog.heart(2);}}
+        if(this.left<=0){this.needsClean=false;this.phase='fetch';dog.happy=now+1500;}}
     }
-    if(this.mug==='floor'&&!this.needsClean&&now>this.back)this.mug='table';
+    if(this.empty&&now>this.refillAt)this.empty=false;
   },
   draw(now){
     if(W<140)return;
@@ -1260,8 +1275,8 @@ function drawProps(t,now){
   drawMantelClock(now);
   if(W>=140){
     const tx=CH()+42,b=floorY+2;
-    if(spill.mug==='table'){r(ctx,tx+4,b-23,7,5,P.cream);r(ctx,tx+11,b-22,2,3,P.cream);r(ctx,tx+5,b-23,5,1,'#5b3519');
-    if(Math.random()<.12)steam.push({x:tx+6+Math.random()*3,y:b-25,l:16});}
+    if(spill.mug==='table'){r(ctx,tx+4,b-23,7,5,P.cream);r(ctx,tx+11,b-22,2,3,P.cream);r(ctx,tx+5,b-23,5,1,spill.empty?'#8c7a6a':'#5b3519');
+    if(!spill.empty&&Math.random()<.12)steam.push({x:tx+6+Math.random()*3,y:b-25,l:16});}
     steam=steam.filter(s=>{s.y-=.4;s.x+=Math.sin(s.l/2)*.4;s.l--;if(s.l%3)r(ctx,s.x,s.y,1,1,'#d8c8bd');return s.l>0;});
   }
   spill.draw(now);
@@ -1288,6 +1303,7 @@ function paint(ts){
   spill.step(ts);dog.step(ts);queen.step(ts);
   queen.draw(ts);
   dog.draw(ts);
+  spill.drawCarried();
   stepSparks();
   ctx.fillStyle='rgba(20,10,44,'+L.dark+')';ctx.fillRect(0,0,W,H);
   if(L.lift>0){ctx.globalCompositeOperation='screen';ctx.fillStyle='rgba(255,236,200,'+L.lift+')';ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation='source-over';}
