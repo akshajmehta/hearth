@@ -1142,7 +1142,7 @@ function drawQueenHead(mode,face,o){
   h(x,y+1,10,9,C);h(x+1,y-1,8,2,C);h(x+2,y-2,2,1,CL);h(x+5,y-2,2,1,CL);
   h(x+7,y+4,7,6,CL);h(x+6,y+7,8,4,CL);h(x+4,y,2,4,CL);
   h(x+13,y+4,2,2,N);
-  if(o.closed)h(x+6,y+3,3,1,K);else{h(x+6,y+3,2,2,K);if(o.lidded)h(x+5,y+2,4,1,CD);else h(x+6,y+3,1,1,'#fff');}
+  if(o.noEye){}else if(o.closed)h(x+6,y+3,3,1,K);else{h(x+6,y+3,2,2,K);if(o.lidded)h(x+5,y+2,4,1,CD);else h(x+6,y+3,1,1,'#fff');}
   if(o.mouth){h(x+9,y+9,5,3,m);h(x+10,y+10,3,2,t);h(x+8,y+12,6,1,CL);}else h(x+8,y+9,5,1,CD);
   h(x-3,y+2,6,13,E);h(x-4,y+5,1,8,E);h(x-2,y+3,2,10,CD);h(x-3,y+15,2,1,E);h(x,y+15,2,1,E);
 }
@@ -1159,7 +1159,8 @@ const queen={
     if(st==='fHop'){const p=Math.min(1,(now-this.start)/650);this.fx=a.x+(e.x-a.x)*p;this.fy=a.y+(e.y-a.y)*p-Math.sin(Math.PI*p)*8;if(p>=1){this.state='fWalk';this.start=now;}}
     else if(st==='fWalk'){if(this.fmove(feed.sherrySpot(),.75)){this.state='fEat';this.dir=-1;this.start=now;}}
     else if(st==='fEat'){if(feed.sherryLeft<=0||!feed.phase){this.state='fLook';this.start=now;this.until=now+1600;}}
-    else if(st==='fLook'){if(now>this.until){this.state='fBack';this.start=now;}}
+    else if(st==='fLook'){if(now>this.until){this.state='fRest';this.start=now;this.until=now+6500;}}
+    else if(st==='fRest'){if(now>this.until){this.state='fBack';this.start=now;}}
     else if(st==='fBack'){if(this.fmove(e,.75)){this.state='fUp';this.dir=1;this.start=now;}}
     else if(st==='fUp'){const p=Math.min(1,(now-this.start)/700);this.fx=e.x+(a.x-e.x)*p;this.fy=e.y+(a.y-e.y)*p-Math.sin(Math.PI*p)*14;if(p>=1){this.state='settle';this.start=now;this.until=now+900;}}
   },
@@ -1194,7 +1195,9 @@ const queen={
     p.x=Math.round(p.x);p.y=Math.round(p.y);
     c.clearRect(0,0,90,76);c.imageSmoothingEnabled=false;
     const q=(x,y,w,h,col)=>{if(d<0)r(c,X-x-w,Y+y,w,h,col);else r(c,X+x,Y+y,w,h,col);};
-    const head=(px,py,ang,mode,face,o)=>{drawQueenHead(mode,face,o);c.save();c.translate(X+(d<0?-px:px),Y+py);c.rotate(d<0?ang:-ang);c.drawImage(qHeadCv,-24,-34);c.restore();};
+    const head=(px,py,ang,mode,face,o)=>{drawQueenHead(mode,face,o);c.save();c.translate(X+(d<0?-px:px),Y+py);c.rotate(d<0?ang:-ang);c.drawImage(qHeadCv,-24,-34);c.restore();
+      if(o.noEye){const a=d<0?ang:-ang,ex=d<0?-2:2,ey=-14,rx=Math.round(X+(d<0?-px:px)+ex*Math.cos(a)-ey*Math.sin(a)),ry=Math.round(Y+py+ex*Math.sin(a)+ey*Math.cos(a));
+        if(o.blink)r(c,rx-1,ry,3,1,QC.K);else{r(c,rx,ry-1,2,4,QC.K);r(c,rx-1,ry,4,2,QC.K);r(c,rx,ry,1,1,'#fff');}}};
     const st=this.state,tw=(this.t>>5)%6===0?1:0;
     const lie=()=>{
       q(-25,-8+tw,9,4,T);q(-28,-6+tw,6,5,TL);q(-27,-1+tw,4,1,CD);q(-23,-4+tw,3,1,CD);
@@ -1219,6 +1222,10 @@ const queen={
       head(15,2,.05,'side',-1,{closed:true});
     }else if(st==='settle'){
       lie();q(4,-15,8,2,collar);head(13,-9,0,'side',-1,{closed:true});
+    }else if(st==='fRest'){
+      r(ctx,p.x-18,p.y-1,39,3,'rgba(29,18,32,.4)');
+      lie();q(4,-15,8,2,collar);
+      const bl=Math.sin(now/2300)>.975;head(12,-9,0,Math.sin((now-this.start)/1400)>.3?'side':'front',d,{lidded:true,closed:bl});
     }else if(st[0]==='f'){
       const moving=st==='fWalk'||st==='fBack',air=st==='fHop'||st==='fUp',lg=air?2:moving?[0,1,0,-1][(this.t>>2)%4]:0;
       if(!air)r(ctx,p.x-18,p.y-1,37,3,'rgba(29,18,32,.4)');
@@ -1229,7 +1236,7 @@ const queen={
       q(-14+lg,-9,4,9,C);q(-8-lg,-9,4,8,CD);q(6+lg,-9,4,9,CL);q(11-lg,-9,4,8,C);
       q(-14+lg,-1,5,1,CL);q(6+lg,-1,5,1,CL);
       q(9,-25,7,2,collar);
-      if(st==='fEat'){const ch=((now-this.start)/520|0)%2;head(22,-8+ch,-.7,'side',d,{lidded:true,mouth:ch===0});}
+      if(st==='fEat'){const ch=((now-this.start)/520|0)%2;head(22,-8+ch,-.7,'side',d,{noEye:true,blink:(now-this.start)%2600<170,mouth:ch===0});}
       else if(st==='fLook'){const lk=((now-this.start)/260|0)%2;head(16,-24,.12,'side',d,{lidded:true,mouth:lk===0});}
       else head(16,-24,air?.2:0,'side',d,{lidded:true});
     }else if(st==='bark'){
@@ -1348,26 +1355,26 @@ const feed={
       if(!this.called&&now-this.t0>800){this.called=true;queen.feed(now);}
       if(now-this.t0>1100)this.phase='eat';
     }
-    if(dog.state==='eat'&&this.phase==='eat')this.coffeeLeft=Math.max(0,this.coffeeLeft-dt/3000);
-    if(queen.state==='fEat')this.sherryLeft=Math.max(0,this.sherryLeft-dt/11500);
-    if(this.phase==='eat'&&((this.coffeeLeft<=0&&this.sherryLeft<=0&&queen.state!=='fEat')||now-this.t0>50000)){this.phase='out';this.ot=now+1300;}
+    if(dog.state==='eat'&&this.phase==='eat')this.coffeeLeft=Math.max(0,this.coffeeLeft-dt/6000);
+    if(queen.state==='fEat')this.sherryLeft=Math.max(0,this.sherryLeft-dt/23000);
+    if(this.phase==='eat'&&((this.coffeeLeft<=0&&this.sherryLeft<=0&&queen.state!=='fEat')||now-this.t0>90000)){this.phase='out';this.ot=now+1300;}
     if(this.phase==='out'&&now>this.ot+1100)this.phase=null;
   },
   bowl(cx,w,h,name,left,col,dark,rim,slide){
-    const x=Math.round(cx-w/2+slide),y=this.by();
-    if(left>0){const ht=1+Math.round(3*left);r(ctx,x+4,y-h-ht+1,w-8,ht,'#8a5a2b');r(ctx,x+5,y-h-ht,w-10,1,'#8a5a2b');
-      for(let i=x+6;i<x+w-6;i+=4)r(ctx,i,y-h-ht+1,1,1,'#c08a4a');}
-    r(ctx,x,y-h,w,2,rim);r(ctx,x+1,y-h+2,w-2,h-3,col);r(ctx,x+2,y-1,w-4,1,dark);r(ctx,x+1,y-2,1,1,dark);r(ctx,x+w-2,y-2,1,1,dark);
-    tinyText(name,x+((w-23)>>1),y-h+3,'#fff3dc');
+    const by=this.by(),mx=Math.round(cx-13+slide),x=Math.round(cx-w/2+slide),y=by-6;
+    r(ctx,mx,by-7,27,7,dark);r(ctx,mx,by-7,27,1,col);r(ctx,mx+1,by,25,1,'rgba(29,18,32,.35)');
+    tinyText(name,mx+2,by-6,'#fff3dc');
+    if(left>0){const ht=1+Math.round(2*left);r(ctx,x+3,y-h-ht+1,w-6,ht,'#8a5a2b');r(ctx,x+4,y-h-ht,w-8,1,'#8a5a2b');
+      for(let i=x+4;i<x+w-4;i+=3)r(ctx,i,y-h-ht+1,1,1,'#c08a4a');}
+    r(ctx,x,y-h,w,2,rim);r(ctx,x+1,y-h+2,w-2,h-3,col);r(ctx,x+2,y-1,w-4,1,dark);r(ctx,x+2,y-h+3,2,1,rim);
   },
   draw(now){
     if(!this.phase)return;
     const far=-(this.sb()+20);let s=0;
     if(this.phase==='in'){const p=Math.min(1,(now-this.t0)/1100);s=far*Math.pow(1-p,3);}
     else if(this.phase==='out'){const p=Math.min(1,Math.max(0,(now-this.ot)/1000));s=far*p*p;}
-    r(ctx,this.cb()-12+s,this.by()-1,25,2,'rgba(29,18,32,.35)');r(ctx,this.sb()-13+s,this.by()-1,27,2,'rgba(29,18,32,.35)');
-    this.bowl(this.cb(),27,9,'COFFEE',this.coffeeLeft,'#3f7f78','#2d5a55','#5fa59a',s);
-    this.bowl(this.sb(),29,10,'SHERRY',this.sherryLeft,'#a8323a','#742228','#cf5a5f',s);
+    this.bowl(this.cb(),13,5,'COFFEE',this.coffeeLeft,'#3f7f78','#2d5a55','#5fa59a',s);
+    this.bowl(this.sb(),17,6,'SHERRY',this.sherryLeft,'#a8323a','#742228','#cf5a5f',s);
   }
 };
 function listenAll(on){if(on&&feed.phase)return;dog.listen(on);queen.listen(on);}
