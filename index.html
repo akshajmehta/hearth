@@ -25,8 +25,8 @@ a{color:inherit}
 #next b{color:var(--ember);font-family:"Pixelify Sans",VT323,monospace;font-size:15px;letter-spacing:.5px;white-space:nowrap}
 #next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 #next em{font-style:normal;color:var(--dim);white-space:nowrap}
-#bellBtn{flex:none;width:30px;height:26px;margin:-4px 0;background:none;border:0;padding:4px;color:var(--ember);align-self:center}
-#bellBtn svg{width:100%;height:100%;display:block;transform-origin:50% 0}
+#bellBtn,#feedBtn{flex:none;width:30px;height:26px;margin:-4px 0;background:none;border:0;padding:4px;color:var(--ember);align-self:center}
+#bellBtn svg,#feedBtn svg{width:100%;height:100%;display:block;transform-origin:50% 0}
 #bellBtn.ring svg{animation:ding .9s steps(6)}
 @keyframes ding{0%,100%{transform:rotate(0)}17%,50%,83%{transform:rotate(22deg)}33%,67%{transform:rotate(-22deg)}}
 #fsBtn{flex:none;width:30px;height:26px;margin:-4px -6px -4px 0;background:none;border:0;padding:4px;color:var(--ember);align-self:center}
@@ -93,7 +93,7 @@ body.wall #next,body.wall #dock,body.wall #bubble,body.wall #sheet{display:none}
 <body>
 <canvas id="scene" aria-label="A pixel-art living room with a fire burning, a dog named Coffee on the rug and a spaniel resting on the armchair"></canvas>
 
-<div id="next" class="px"><b>NEXT</b><span id="nextT">Nothing planned</span><em id="nextW"></em><button id="bellBtn" aria-label="Ring the doorbell"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path d="M4 0h1v1H4zM3 1h3v1H3zM2 2h5v4H2zM1 6h7v1H1zM4 8h1v1H4z"/></svg></button><button id="fsBtn" aria-label="Full screen"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path id="fsIcon" d="M0 0h3v1H1v2H0zM6 0h3v3H8V1H6zM0 6h1v2h2v1H0zM8 6h1v3H6V8h2z"/></svg></button></div>
+<div id="next" class="px"><b>NEXT</b><span id="nextT">Nothing planned</span><em id="nextW"></em><button id="feedBtn" aria-label="Feed the dogs"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path d="M0 4h9v1H0zM1 5h7v2H1zM2 7h5v1H2zM2 2h2v2H2zM5 1h2v3H5z"/></svg></button><button id="bellBtn" aria-label="Ring the doorbell"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path d="M4 0h1v1H4zM3 1h3v1H3zM2 2h5v4H2zM1 6h7v1H1zM4 8h1v1H4z"/></svg></button><button id="fsBtn" aria-label="Full screen"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="currentColor"><path id="fsIcon" d="M0 0h3v1H1v2H0zM6 0h3v3H8V1H6zM0 6h1v2h2v1H0zM8 6h1v3H6V8h2z"/></svg></button></div>
 
 <div id="dock">
   <div id="bubble" role="status"><p id="bubT"></p><button id="undo" hidden>Undo</button></div>
@@ -950,7 +950,7 @@ const dog={
     ];
   },
   next(now){
-    if(this.plan.some(p=>p.door)){}
+    if(this.plan.some(p=>p.door||p.feed)){}
     else if(spill.needsClean&&!this.plan.some(p=>p.s==='lick'))this.plan=spill.cleanPlan(this.state==='sleep');
     else if(spill.phase==='fetch'&&!this.plan.some(p=>p.s==='reach')&&this.state!=='reach')this.plan=spill.fetchPlan();
     if(!this.plan.length){
@@ -960,7 +960,9 @@ const dog={
     this.begin(this.plan.shift(),now);
   },
   begin(p,now){
-    let s=p.s;this.start=now;this.until=now+(p.ms||20000);this.hop=null;
+    let s=p.s;this.start=now;this.until=now+(p.ms||20000);this.hop=null;this.fast=!!p.fast;this.waitFeed=!!p.wait;
+    if(s==='eat'){this.dir=1;this.happy=now+3500;}
+    if(p.wait){this.dir=1;}
     if(p.door)this.dir=-1;
     if(s==='walkDoor'){this.tx=Math.max(18,FX()+4);this.ty=this.rugY();this.dir=this.tx>this.x?1:-1;s='walk';}
     else if(s==='walkTo'){const g=spill.lickSpot();this.tx=g.x;this.ty=g.y;this.dir=this.tx>this.x?1:-1;s='walk';}
@@ -973,6 +975,7 @@ const dog={
     
     if(p.snub)queen.snub();
     if(s==='sit'){this.headMode='side';this.headFace=this.dir;this.headAng=0;this.headNext=now+rnd(800,1800);}
+    if(s==='runBowl'){const g=feed.coffeeSpot();this.tx=g.x;this.ty=g.y;this.dir=this.tx>this.x?1:-1;s='walk';}
     this.state=s;
   },
   landHop(){if(this.hop){this.x=this.hop.x1;this.y=this.hop.y1;this.onSofa=this.hop.dest;if(this.onSofa)this.dir=-1;this.hop=null;}},
@@ -992,6 +995,8 @@ const dog={
   cleanUp(now){if(this.listening)return;this.landHop();this.plan=spill.cleanPlan(this.state==='sleep');this.next(now);},
   wakeThen(now,sitMs){if(this.listening)return;this.landHop();this.plan=[{s:'yawn',ms:1000},{s:'sleep',ms:rnd(9000,18000)}];this.begin({s:'sit',ms:sitMs},now);},
   celebrate(){const n=performance.now();this.happy=n+1800;this.heart(3);this.wakeThen(n,3200);},
+  feed(n){this.landHop();this.plan=[{s:'runBowl',fast:true,feed:true},{s:'eat',ms:60000,feed:true},{s:'sit',ms:120000,wait:true,feed:true},{s:'yawn',ms:1000},{s:'walk'},{s:'sleep',ms:rnd(12000,22000)}];
+    if(this.state==='sleep')this.begin({s:'stretch',ms:400},n);else this.next(n);},
   door(n){if(this.listening)return;this.landHop();this.happy=0;this.plan=[{s:'bark',ms:2600,door:true},{s:'walkDoor'},{s:'bark',ms:2400,door:true},{s:'sit',ms:1600},{s:'bark',ms:1200,door:true},{s:'sit',ms:1800},{s:'yawn',ms:1000},{s:'sleep',ms:rnd(12000,22000)}];
     if(this.state==='sleep')this.begin({s:'stretch',ms:450},n);else this.next(n);},
   alert(){const n=performance.now();this.happy=n+2500;this.landHop();if(this.listening)return;this.plan=[{s:'sit',ms:2200},{s:'yawn',ms:1000},{s:'sleep',ms:12000}];this.begin({s:'bark',ms:1800},n);},
@@ -1013,7 +1018,10 @@ const dog={
     }
     if(this.state==='walk'){
       const dx=this.tx-this.x,dy=this.ty-this.y,dd=Math.hypot(dx,dy);
-      if(dd<1.3){this.x=this.tx;this.y=this.ty;this.until=0;}else{this.x+=dx/dd*.95;this.y+=dy/dd*.95;this.dir=dx>=0?1:-1;}
+      const sp=this.fast?2:.95;
+      if(dd<sp+.4){this.x=this.tx;this.y=this.ty;this.until=0;}else{this.x+=dx/dd*sp;this.y+=dy/dd*sp;this.dir=dx>=0?1:-1;}
+    }else if(this.state==='eat'&&feed.coffeeLeft<=0){this.until=0;
+    }else if(this.state==='sit'&&this.waitFeed&&feed.phase!=='eat'&&feed.phase!=='in'){this.waitFeed=false;this.until=now+900;
     }else if(this.state==='sit'&&now>this.headNext){
       if(Math.random()<.5){this.headFace=-this.headFace;}
       this.headMode='side';this.headNext=now+rnd(1200,2800);
@@ -1094,6 +1102,9 @@ const dog={
     }else if(st==='reach'){
       lift=6;q(-6,0,4,6,Wh);q(4,0,4,6,Wh);
       sit(0,'side',d,-.2,{glad:true});q(11,-17,4,3,Wh);q(12,-14,4,3,Wh);
+    }else if(st==='eat'){
+      walkPose(this.t%4,0);
+      const fb=this.t%2;head(16,-6+fb,.42,'side',d,{mouth:!fb});
     }else if(st==='lick'||st==='grab'){
       walkPose(0,0);
       const fl=(this.t>>1)%3;head(17,-2+(fl===1?1:0),.5,'side',d,{mouth:fl!==2});
@@ -1138,7 +1149,20 @@ function drawQueenHead(mode,face,o){
 const queen={
   state:'rest',t:0,start:0,until:0,listening:false,howlEnd:0,howlFrom:0,audioAt:0,snubUntil:0,notes:[],headMode:'front',nextLook:0,
   init(now){this.state='rest';this.start=now;this.until=now+rnd(20000,40000);},
-  pos(){return{x:CH()+15,y:floorY-14};},
+  seat(){return{x:CH()+15,y:floorY-14};},
+  edge(){return{x:CH()-14,y:floorY+16};},
+  pos(){return this.state[0]==='f'?{x:this.fx,y:this.fy}:this.seat();},
+  feed(n){this.snubUntil=0;this.dir=-1;const s=this.seat();this.fx=s.x;this.fy=s.y;this.state='fHop';this.start=n;},
+  fmove(g,sp){const dx=g.x-this.fx,dy=g.y-this.fy,dd=Math.hypot(dx,dy);if(dd<sp+.4){this.fx=g.x;this.fy=g.y;return true;}this.fx+=dx/dd*sp;this.fy+=dy/dd*sp;if(Math.abs(dx)>1)this.dir=dx>0?1:-1;return false;},
+  fstep(now){
+    const st=this.state,a=this.seat(),e=this.edge();
+    if(st==='fHop'){const p=Math.min(1,(now-this.start)/650);this.fx=a.x+(e.x-a.x)*p;this.fy=a.y+(e.y-a.y)*p-Math.sin(Math.PI*p)*8;if(p>=1){this.state='fWalk';this.start=now;}}
+    else if(st==='fWalk'){if(this.fmove(feed.sherrySpot(),.75)){this.state='fEat';this.dir=-1;this.start=now;}}
+    else if(st==='fEat'){if(feed.sherryLeft<=0||!feed.phase){this.state='fLook';this.start=now;this.until=now+1600;}}
+    else if(st==='fLook'){if(now>this.until){this.state='fBack';this.start=now;}}
+    else if(st==='fBack'){if(this.fmove(e,.75)){this.state='fUp';this.dir=1;this.start=now;}}
+    else if(st==='fUp'){const p=Math.min(1,(now-this.start)/700);this.fx=e.x+(a.x-e.x)*p;this.fy=e.y+(a.y-e.y)*p-Math.sin(Math.PI*p)*14;if(p>=1){this.state='settle';this.start=now;this.until=now+900;}}
+  },
   listen(on){
     const now=performance.now();
     if(on){this.listening=true;this.howlFrom=now;this.howlEnd=0;this.audioAt=0;this.snubUntil=0;if(this.state!=='rise'&&this.state!=='howl'){this.state='rise';this.start=now;this.until=now+550;}}
@@ -1149,6 +1173,7 @@ const queen={
   hit(px,py){const c=CH();return px>c-8&&px<c+40&&py>floorY-46&&py<floorY+4;},
   step(now){
     this.t++;
+    if(this.state[0]==='f'){this.fstep(now);return;}
     if(this.listening){
       if(this.state==='rise'&&now>this.until){this.state='howl';this.start=now;}
       if(this.state==='howl'&&(this.t%7)===0){const p=this.pos();this.notes.push({x:p.x-24+rnd(-3,3),y:p.y-46,l:26,v:rnd(.35,.6),s:rnd(0,6)});}
@@ -1165,10 +1190,11 @@ const queen={
     else if(this.state==='sleep'){this.state='rest';this.start=now;this.until=now+rnd(20000,40000);}
   },
   draw(now){
-    const p=this.pos(),X=45,Y=66,d=-1,c=dogC,{C,CL,CD,E,T,TL,TD,collar}=QC;
+    const p=this.pos(),X=45,Y=66,d=this.state[0]==='f'?this.dir:-1,c=dogC,{C,CL,CD,E,T,TL,TD,collar}=QC;
+    p.x=Math.round(p.x);p.y=Math.round(p.y);
     c.clearRect(0,0,90,76);c.imageSmoothingEnabled=false;
-    const q=(x,y,w,h,col)=>r(c,X-x-w,Y+y,w,h,col);
-    const head=(px,py,ang,mode,face,o)=>{drawQueenHead(mode,face,o);c.save();c.translate(X-px,Y+py);c.rotate(ang);c.drawImage(qHeadCv,-24,-34);c.restore();};
+    const q=(x,y,w,h,col)=>{if(d<0)r(c,X-x-w,Y+y,w,h,col);else r(c,X+x,Y+y,w,h,col);};
+    const head=(px,py,ang,mode,face,o)=>{drawQueenHead(mode,face,o);c.save();c.translate(X+(d<0?-px:px),Y+py);c.rotate(d<0?ang:-ang);c.drawImage(qHeadCv,-24,-34);c.restore();};
     const st=this.state,tw=(this.t>>5)%6===0?1:0;
     const lie=()=>{
       q(-25,-8+tw,9,4,T);q(-28,-6+tw,6,5,TL);q(-27,-1+tw,4,1,CD);q(-23,-4+tw,3,1,CD);
@@ -1193,6 +1219,19 @@ const queen={
       head(15,2,.05,'side',-1,{closed:true});
     }else if(st==='settle'){
       lie();q(4,-15,8,2,collar);head(13,-9,0,'side',-1,{closed:true});
+    }else if(st[0]==='f'){
+      const moving=st==='fWalk'||st==='fBack',air=st==='fHop'||st==='fUp',lg=air?2:moving?[0,1,0,-1][(this.t>>2)%4]:0;
+      if(!air)r(ctx,p.x-18,p.y-1,37,3,'rgba(29,18,32,.4)');
+      const sw=st==='fEat'?((this.t>>4)%2):tw;
+      q(-23,-22-sw,8,4,T);q(-28,-25-sw,7,6,TL);q(-27,-19-sw,3,2,CD);
+      q(-16,-22,31,12,T);q(-14,-24,27,2,T);q(-12,-25,20,1,TL);q(-11,-21,3,1,TD);q(-3,-20,3,1,TD);q(4,-22,3,1,TD);
+      q(-15,-12,29,3,C);q(8,-23,8,13,CL);
+      q(-14+lg,-9,4,9,C);q(-8-lg,-9,4,8,CD);q(6+lg,-9,4,9,CL);q(11-lg,-9,4,8,C);
+      q(-14+lg,-1,5,1,CL);q(6+lg,-1,5,1,CL);
+      q(9,-25,7,2,collar);
+      if(st==='fEat'){const ch=((now-this.start)/520|0)%2;head(22,-8+ch,-.7,'side',d,{lidded:true,mouth:ch===0});}
+      else if(st==='fLook'){const lk=((now-this.start)/260|0)%2;head(16,-24,.12,'side',d,{lidded:true,mouth:lk===0});}
+      else head(16,-24,air?.2:0,'side',d,{lidded:true});
     }else if(st==='bark'){
       sitUp();const on=Math.sin((now-this.start)/75)>0&&((now-this.start)%1700<1250);
       head(6,on?-24:-23,on?-.28:-.08,'side',-1,{mouth:on});
@@ -1240,7 +1279,7 @@ const spill={
     const gap=last?Math.max(0,last+30*6e4-Date.now()):0;
     this.nextAt=now+Math.max(rnd(10,40)*6e4,gap);
   },
-  can(){return W>=140&&!this.empty&&!dog.listening&&!queen.listening&&(queen.state==='rest'||queen.state==='sleep')&&this.mug==='table'&&!document.hidden;},
+  can(){return W>=140&&!feed.phase&&!this.empty&&!dog.listening&&!queen.listening&&(queen.state==='rest'||queen.state==='sleep')&&this.mug==='table'&&!document.hidden;},
   start(now){
     this.phase='swish';this.t0=now;queen.snubUntil=0;queen.state='swish';queen.start=now;queen.until=now+1500;
     try{localStorage.setItem('hearth.spill',String(Date.now()));}catch(e){}
@@ -1285,17 +1324,65 @@ const spill={
     this.drops=this.drops.filter(d=>{d.x+=d.vx;d.y+=d.vy;d.vy+=.35;d.l--;if(d.y>floorY+15){d.y=floorY+15;d.vx*=.4;d.vy=0;}r(ctx,d.x,d.y,1,1,'#5b3519');return d.l>0;});
   }
 };
-function listenAll(on){dog.listen(on);queen.listen(on);}
+/* feeding time: only ever started by the food button */
+const GLY={C:'111100100100111',O:'111101101101111',F:'111100110100100',E:'111100110100111',S:'111100111001111',H:'101101111101101',R:'110101110101101',Y:'101101010010010'};
+function tinyText(t,x,y,col){for(let k=0;k<t.length;k++){const g=GLY[t[k]];for(let i=0;i<15;i++)if(g[i]==='1')r(ctx,x+k*4+i%3,y+(i/3|0),1,1,col);}}
+const feed={
+  phase:null,t0:0,ot:0,coffeeLeft:0,sherryLeft:0,lastT:0,called:false,
+  mid(){return W<150?(W>>1)-5:FX()+44;},
+  by(){return floorY+41;},
+  cb(){return this.mid()-14;},sb(){return this.mid()+14;},
+  coffeeSpot(){return{x:this.cb()-30,y:this.by()-1};},
+  sherrySpot(){return{x:this.sb()+34,y:this.by()-1};},
+  busy(){return spill.phase||spill.needsClean||spill.mug!=='table'||dog.listening||queen.listening||queen.state==='swish'||queen.state==='peek';},
+  start(now){
+    if(this.phase){say(this.phase==='out'?'Just clearing up.':'They are still eating.');return;}
+    if(this.busy()){say('Give them a moment, then try again.');return;}
+    this.phase='in';this.t0=now;this.coffeeLeft=1;this.sherryLeft=1;this.called=false;this.lastT=now;
+    say('Dinner time!');dog.feed(now);
+  },
+  step(now){
+    if(!this.phase)return;
+    const dt=Math.min(250,now-this.lastT);this.lastT=now;
+    if(this.phase==='in'){
+      if(!this.called&&now-this.t0>800){this.called=true;queen.feed(now);}
+      if(now-this.t0>1100)this.phase='eat';
+    }
+    if(dog.state==='eat'&&this.phase==='eat')this.coffeeLeft=Math.max(0,this.coffeeLeft-dt/3000);
+    if(queen.state==='fEat')this.sherryLeft=Math.max(0,this.sherryLeft-dt/11500);
+    if(this.phase==='eat'&&((this.coffeeLeft<=0&&this.sherryLeft<=0&&queen.state!=='fEat')||now-this.t0>50000)){this.phase='out';this.ot=now+1300;}
+    if(this.phase==='out'&&now>this.ot+1100)this.phase=null;
+  },
+  bowl(cx,w,h,name,left,col,dark,rim,slide){
+    const x=Math.round(cx-w/2+slide),y=this.by();
+    if(left>0){const ht=1+Math.round(3*left);r(ctx,x+4,y-h-ht+1,w-8,ht,'#8a5a2b');r(ctx,x+5,y-h-ht,w-10,1,'#8a5a2b');
+      for(let i=x+6;i<x+w-6;i+=4)r(ctx,i,y-h-ht+1,1,1,'#c08a4a');}
+    r(ctx,x,y-h,w,2,rim);r(ctx,x+1,y-h+2,w-2,h-3,col);r(ctx,x+2,y-1,w-4,1,dark);r(ctx,x+1,y-2,1,1,dark);r(ctx,x+w-2,y-2,1,1,dark);
+    tinyText(name,x+((w-23)>>1),y-h+3,'#fff3dc');
+  },
+  draw(now){
+    if(!this.phase)return;
+    const far=-(this.sb()+20);let s=0;
+    if(this.phase==='in'){const p=Math.min(1,(now-this.t0)/1100);s=far*Math.pow(1-p,3);}
+    else if(this.phase==='out'){const p=Math.min(1,Math.max(0,(now-this.ot)/1000));s=far*p*p;}
+    r(ctx,this.cb()-12+s,this.by()-1,25,2,'rgba(29,18,32,.35)');r(ctx,this.sb()-13+s,this.by()-1,27,2,'rgba(29,18,32,.35)');
+    this.bowl(this.cb(),27,9,'COFFEE',this.coffeeLeft,'#3f7f78','#2d5a55','#5fa59a',s);
+    this.bowl(this.sb(),29,10,'SHERRY',this.sherryLeft,'#a8323a','#742228','#cf5a5f',s);
+  }
+};
+function listenAll(on){if(on&&feed.phase)return;dog.listen(on);queen.listen(on);}
 function curtainAt(px){const w=winRect();return Math.min(1,Math.max(0,1-Math.abs(px-(w.x+w.w/2))/(w.w/2)));}
 cv.addEventListener('pointermove',e=>{if(!cDrag)return;const px=e.clientX/SC;if(Math.abs(px-cDrag.x0)>1.5)cDrag.moved=true;if(cDrag.moved){let v=curtainAt(px);if(v>.93)v=1;if(v<.07)v=0;curtain=curtainT=v;}});
 function endDrag(){if(!cDrag)return;if(!cDrag.moved)curtainT=curtainT>.5?0:1;cDrag=null;try{localStorage.setItem('hearth.curtain',String(curtainT));}catch(e){}}
 cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
+$('feedBtn').onclick=e=>{e.stopPropagation();feed.start(performance.now());};
 function ringBell(){
+  if(feed.phase){say('They are busy eating.');return;}
   const b=$('bellBtn');b.classList.remove('ring');void b.offsetWidth;b.classList.add('ring');
   say('Ding dong!');const n=performance.now();dog.door(n);queen.door(n);
 }
 $('bellBtn').onclick=e=>{e.stopPropagation();ringBell();};
-cv.addEventListener('pointerdown',e=>{const px=e.clientX/SC,py=e.clientY/SC;if(inWindow(px,py)){cDrag={x0:px,moved:false};try{cv.setPointerCapture(e.pointerId);}catch(_){}return;}if(dog.hit(px,py)){unlock();dog.pet();}else if(queen.hit(px,py)){unlock();queen.snub();}});
+cv.addEventListener('pointerdown',e=>{const px=e.clientX/SC,py=e.clientY/SC;if(inWindow(px,py)){cDrag={x0:px,moved:false};try{cv.setPointerCapture(e.pointerId);}catch(_){}return;}if(feed.phase)return;if(dog.hit(px,py)){unlock();dog.pet();}else if(queen.hit(px,py)){unlock();queen.snub();}});
 
 /* frame */
 function drawMantelClock(now){
@@ -1342,6 +1429,7 @@ function paint(ts){
   const cw=drawCurtains();
   stepFire();drawFire();
   drawProps(ts,now);
+  feed.step(ts);feed.draw(ts);
   spill.step(ts);dog.step(ts);queen.step(ts);
   queen.draw(ts);
   dog.draw(ts);
@@ -1358,7 +1446,7 @@ if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
 prevSnap=snapshot(S);
 if(location.hash==='#wallpaper')document.body.classList.add('wall');
 layout();queen.init(performance.now());spill.schedule(performance.now());renderAll();queueSync(0);if(!window.__manualFrames)requestAnimationFrame(frame);
-window.__hearth={spill,paint2:paint,paint,cv,handle,dog,queen,S:()=>S,openSheet,setTime:v=>{fakeNow=v;},sunTimes};
+window.__hearth={feed,spill,paint2:paint,paint,cv,handle,dog,queen,S:()=>S,openSheet,setTime:v=>{fakeNow=v;},sunTimes};
 </script>
 </body>
 </html>
